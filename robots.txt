@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dalbouh02.github.io/Review-OS/sitemap.xml
