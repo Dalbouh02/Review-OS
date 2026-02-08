@@ -918,7 +918,7 @@ class ReviewOS {
         const dd = document.getElementById('dd');
         const sp = document.getElementById('spin');
         
-        if(q.length < 2) { dd.classList.remove('visible'); sp.style.display='none'; return; }
+        if(q.length < 3) { dd.classList.remove('visible'); sp.style.display='none'; return; }
         
         const cacheKey = q.toLowerCase();
         if (this.searchCache.has(cacheKey)) {
@@ -934,42 +934,55 @@ class ReviewOS {
             const steamUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`;
             
             const proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(steamUrl)}`,
-                `https://corsproxy.io/?${encodeURIComponent(steamUrl)}`,
-                `https://thingproxy.freeboard.io/fetch/${steamUrl}`
+                { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(steamUrl)}` },
+                { url: `https://corsproxy.io/?${encodeURIComponent(steamUrl)}` },
+                { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(steamUrl)}` },
+                { url: `https://thingproxy.freeboard.io/fetch/${steamUrl}` }
             ];
 
-            try {
-                const data = await Promise.any(proxies.map(url => 
-                    fetch(url, { signal })
-                        .then(r => {
-                            if(!r.ok) throw new Error(r.status);
-                            return r.json();
-                        })
-                        .then(d => {
-                            if (!d || (!d.items && d.total === undefined)) throw new Error('Invalid Data');
-                            return d;
-                        })
-                ));
-                
-                if (signal.aborted) return;
-                this.searchCache.set(cacheKey, data);
-                this.renderResults(data, q);
-                sp.style.display='none';
+            let success = false;
 
-            } catch(e) { 
-                if (!signal.aborted) {
-                    sp.style.display='none';
-                    dd.replaceChildren();
-                    dd.append(el('div', 'dd-item', [
-                        el('span', 'dd-text', `Connection failed. Press Enter to use manual name.`, {style:'color:var(--c-neon-red)'})
-                    ], {
-                        onclick: () => { this.state.name = q; this.nav(1); }
-                    }));
-                    dd.classList.add('visible');
+            for (const proxy of proxies) {
+                if (success || signal.aborted) break;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 1500);
+                    
+                    const response = await fetch(proxy.url, { 
+                        signal: (signal.aborted ? signal : controller.signal) 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if(!response.ok) continue;
+
+                    let data = await response.json();
+                    
+                    if (data.contents) {
+                        try { data = JSON.parse(data.contents); } catch(e) {}
+                    }
+                    
+                    if (data && (data.items || data.total !== undefined)) {
+                        this.searchCache.set(cacheKey, data);
+                        this.renderResults(data, q);
+                        success = true;
+                    }
+                } catch(e) {
                 }
             }
-        }, 300);
+
+            if (!success && !signal.aborted) {
+                sp.style.display='none';
+                dd.replaceChildren();
+                dd.append(el('div', 'dd-item', [
+                    el('span', 'dd-text', `Connection failed. Press Enter to use manual name.`, {style:'color:var(--c-neon-red)'})
+                ], {
+                    onclick: () => { this.state.name = q; this.nav(1); }
+                }));
+                dd.classList.add('visible');
+            } else {
+                 if (!signal.aborted) sp.style.display='none';
+            }
+        }, 400);
     }
 
     renderResults(d, q) {
