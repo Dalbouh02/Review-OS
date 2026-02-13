@@ -475,7 +475,7 @@
 <script>
     
 const CONFIG = [
-    { type: 'search', id: 'meta', title: 'Target Identification', desc: 'Scan Steam Database or Input Manual Override', skippable: false },
+    { type: 'search', id: 'meta', title: 'Target Identification', desc: 'Scan Steam Database or Input App ID', skippable: false },
     { type: 'select', id: 'status', title: 'Mission Status', desc: 'Completion Rate', opts: ["100% Completion / Platinum", "Main Story Finished", "Main + Side Content", "Endless / Multiplayer", "Dropped (Got bored)", "Refunded"] },
     { type: 'select', id: 'playtime', title: 'Play Time', desc: 'Temporal Investment', opts: ["Short (< 10h)", "Average (10h - 40h)", "Long (40h - 100h)", "Very Long (100h+)", "Infinite / Sandbox"] },
     { type: 'select', id: 'price', title: 'Price', desc: 'Credit Value', opts: ["Free", "Worth Full Price", "Wait for Sale", "Overpriced", "Waste of money"] },
@@ -613,6 +613,7 @@ class ReviewOS {
 
     clearTimeouts() {
         this.timeouts.forEach(t => clearTimeout(t));
+        if(this.ctl) this.ctl.abort(); 
         this.timeouts = [];
     }
 
@@ -620,7 +621,14 @@ class ReviewOS {
         if(this.step===0 && d===1) {
             const manualInput = document.getElementById('i-search')?.value;
             if(!this.state.name && !this.state.img && manualInput && manualInput.trim().length > 0) {
-                this.state.name = manualInput;
+                const idMatch = manualInput.match(/(\d{6,})/);
+                if (idMatch) {
+                    this.state.appID = idMatch[1];
+                    this.fetchDetailsFromID(this.state.appID);
+                    return;
+                } else {
+                    this.state.name = manualInput;
+                }
             }
             if(!this.state.name && !this.state.img) {
                 document.querySelector('input')?.focus(); 
@@ -632,6 +640,44 @@ class ReviewOS {
         this.saveProgress();
         const n = this.step + d;
         if(n >= 0 && n < CONFIG.length) this.trans(n);
+    }
+
+    async fetchDetailsFromID(id) {
+        document.getElementById('spin').style.display = 'block';
+        const proxyList = [
+            `https://corsproxy.io/?`, 
+            `https://api.allorigins.win/raw?url=`
+        ];
+        const targetUrl = `https://store.steampowered.com/api/appdetails?appids=${id}`;
+        
+        let found = false;
+        for(const proxy of proxyList) {
+            try {
+                const res = await fetch(proxy + encodeURIComponent(targetUrl));
+                if(res.ok) {
+                    const data = await res.json();
+                    let finalData = data;
+                    if(data.contents) try { finalData = JSON.parse(data.contents); } catch(e){}
+                    
+                    if(finalData && finalData[id] && finalData[id].success) {
+                        const d = finalData[id].data;
+                        this.state.name = d.name;
+                        this.state.appID = id;
+                        this.state.img = d.header_image;
+                        found = true;
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        if(!found) {
+            this.state.name = "Unknown Game (ID: " + id + ")";
+            this.state.img = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`;
+        }
+        
+        this.saveProgress();
+        this.trans(1);
     }
 
     skip() {
@@ -721,11 +767,26 @@ class ReviewOS {
         if(this.state.img) {
             const card = el('div', 'game-card');
             const img = el('img', '', [], { src: this.state.img });
-            img.onerror = () => { img.src = 'https://placehold.co/600x350/000/0aff60?text=NO+SIGNAL'; };
+            
+            img.onerror = () => {
+                if (img.src.includes('shared.fastly')) {
+                    img.src = img.src.replace('shared.fastly', 'cdn.cloudflare');
+                } else if (img.src.includes('cdn.cloudflare')) {
+                    img.src = `https://placehold.co/600x350/000/0aff60?text=${encodeURIComponent(this.state.name || 'GAME DATA')}`;
+                }
+            };
             
             const info = el('div', '', [
                 el('div', '', this.state.name, {style:'font-weight:700; font-size:20px; color:#fff'}),
-                el('button', 'btn-link', 'RE-SCAN DATABASE', {onclick:()=>{
+                el('button', 'btn-link', 'RE-SCAN / EDIT IMAGE', {onclick:()=>{
+                    if(!this.state.appID) {
+                        const newID = prompt("Enter Steam App ID (Numbers Only) to fetch image:", "");
+                        if(newID && /^\d+$/.test(newID.trim())) {
+                            this.state.appID = newID.trim();
+                            this.fetchDetailsFromID(this.state.appID);
+                            return;
+                        }
+                    }
                     this.state.name=""; this.state.appID=""; this.state.img=""; 
                     this.saveProgress(); 
                     this.render();
@@ -735,7 +796,7 @@ class ReviewOS {
             card.append(img, info);
             p.append(card);
         } else {
-            const inp = el('input', '', [], {id:'i-search', placeholder:'Game Name', value:this.state.name, autocomplete:'off', 'aria-label': 'Search Game'});
+            const inp = el('input', '', [], {id:'i-search', placeholder:'Game Name or App ID', value:this.state.name, autocomplete:'off', 'aria-label': 'Search Game'});
             const spin = el('div', 'spinner', [], {id:'spin'});
             const dd = el('div', 'dropdown', [], {id:'dd'});
             p.append(el('div', 'input-wrap', [inp, spin, dd]));
@@ -918,6 +979,18 @@ class ReviewOS {
         const dd = document.getElementById('dd');
         const sp = document.getElementById('spin');
         
+        const idMatch = q.match(/(\d{6,})/);
+        if (idMatch) {
+             sp.style.display='none';
+             const fakeItem = {
+                 name: "ID: " + idMatch[1] + " (Click to Select)",
+                 id: idMatch[1],
+                 tiny_image: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${idMatch[1]}/header.jpg`
+             };
+             this.renderResults({ items: [fakeItem] }, q);
+             return;
+        }
+
         if(q.length < 3) { dd.classList.remove('visible'); sp.style.display='none'; return; }
         
         const cacheKey = q.toLowerCase();
@@ -931,58 +1004,79 @@ class ReviewOS {
         this.tmr = setTimeout(async ()=>{
             this.ctl = new AbortController();
             const signal = this.ctl.signal;
-            const steamUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`;
             
+            const storeUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`;
+            const cheapSharkUrl = `https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(q)}&limit=5`;
+            const communityUrl = `https://steamcommunity.com/actions/SearchApps/${encodeURIComponent(q)}`;
+
             const proxies = [
-                { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(steamUrl)}` },
-                { url: `https://corsproxy.io/?${encodeURIComponent(steamUrl)}` },
-                { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(steamUrl)}` },
-                { url: `https://thingproxy.freeboard.io/fetch/${steamUrl}` }
+                `https://corsproxy.io/?`,
+                `https://api.allorigins.win/raw?url=`,
+                `https://thingproxy.freeboard.io/fetch/`,
+                `https://api.codetabs.com/v1/proxy?quest=`
             ];
+            
+            const tryFetch = async (targetUrl, type = 'store') => {
+                const urlsToTry = (type === 'cheapshark') ? [targetUrl, ...proxies.map(p => p + encodeURIComponent(targetUrl))] : proxies.map(p => p + encodeURIComponent(targetUrl));
+                
+                for (const url of urlsToTry) {
+                    if (signal.aborted) break;
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 2000);
+                        const response = await fetch(url, { signal: (signal.aborted ? signal : controller.signal) });
+                        clearTimeout(timeoutId);
+                        
+                        if(!response.ok) continue;
+                        let data = await response.json();
+                        
+                        if (data.contents) { try { data = JSON.parse(data.contents); } catch(e) {} }
 
-            let success = false;
+                        if (type === 'cheapshark' && Array.isArray(data)) {
+                             if(data.length === 0) return null;
+                             return { items: data.map(x => ({ id: x.steamAppID, name: x.external, tiny_image: x.thumb })) };
+                        }
 
-            for (const proxy of proxies) {
-                if (success || signal.aborted) break;
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 1500);
-                    
-                    const response = await fetch(proxy.url, { 
-                        signal: (signal.aborted ? signal : controller.signal) 
-                    });
-                    clearTimeout(timeoutId);
-
-                    if(!response.ok) continue;
-
-                    let data = await response.json();
-                    
-                    if (data.contents) {
-                        try { data = JSON.parse(data.contents); } catch(e) {}
-                    }
-                    
-                    if (data && (data.items || data.total !== undefined)) {
-                        this.searchCache.set(cacheKey, data);
-                        this.renderResults(data, q);
-                        success = true;
-                    }
-                } catch(e) {
+                        if (type === 'community' && Array.isArray(data)) {
+                             return { items: data.map(x => ({ id: x.appid, name: x.name, tiny_image: x.logo || x.icon })) };
+                        }
+                        
+                        if (data && (data.items || data.total > 0)) return data;
+                    } catch(e) { continue; }
                 }
+                return null;
+            };
+
+            let result = await tryFetch(storeUrl, 'store');
+            
+            if (!result && !signal.aborted) {
+                result = await tryFetch(cheapSharkUrl, 'cheapshark');
             }
 
-            if (!success && !signal.aborted) {
+            if (!result && !signal.aborted) {
+                result = await tryFetch(communityUrl, 'community');
+            }
+
+            if (result && !signal.aborted) {
+                this.searchCache.set(cacheKey, result);
+                this.renderResults(result, q);
+            } else if (!signal.aborted) {
                 sp.style.display='none';
                 dd.replaceChildren();
                 dd.append(el('div', 'dd-item', [
-                    el('span', 'dd-text', `Connection failed. Press Enter to use manual name.`, {style:'color:var(--c-neon-red)'})
+                    el('span', 'dd-text', `Connection Failed. `, {style:'color:var(--c-neon-red)'}),
+                    el('a', 'dd-text', `[FIND ID ON STEAMDB]`, {
+                        style:'color:var(--c-neon-blue); text-decoration:underline; margin-left:5px',
+                        href: `https://steamdb.info/search/?a=app&q=${encodeURIComponent(q)}`,
+                        target: '_blank', rel: 'noopener noreferrer',
+                        onclick: (e) => e.stopPropagation() 
+                    })
                 ], {
-                    onclick: () => { this.state.name = q; this.nav(1); }
+                    onclick: () => { /* No-op to allow link click */ }
                 }));
                 dd.classList.add('visible');
-            } else {
-                 if (!signal.aborted) sp.style.display='none';
             }
-        }, 400);
+        }, 300);
     }
 
     renderResults(d, q) {
@@ -1021,7 +1115,7 @@ class ReviewOS {
             dd.classList.add('visible');
         } else {
             dd.append(el('div', 'dd-item', [
-                el('span', 'dd-text', `No results for "${q}". Press Enter to use manual name.`, {style:'color:var(--c-neon-red)'})
+                el('span', 'dd-text', `No results for "${q}". Press Enter to use manual mode.`, {style:'color:var(--c-neon-red)'})
             ], {
                 onclick: () => {
                     this.state.name = q;
