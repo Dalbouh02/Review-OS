@@ -624,8 +624,8 @@ class ReviewOS {
                 const idMatch = manualInput.match(/(\d{6,})/);
                 if (idMatch) {
                     this.state.appID = idMatch[1];
-                    this.fetchDetailsFromID(this.state.appID);
-                    return;
+                    this.state.name = "Unknown Game (ID: " + this.state.appID + ")";
+                    this.state.img = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${this.state.appID}/header.jpg`;
                 } else {
                     this.state.name = manualInput;
                 }
@@ -640,44 +640,6 @@ class ReviewOS {
         this.saveProgress();
         const n = this.step + d;
         if(n >= 0 && n < CONFIG.length) this.trans(n);
-    }
-
-    async fetchDetailsFromID(id) {
-        document.getElementById('spin').style.display = 'block';
-        const proxyList = [
-            `https://corsproxy.io/?`, 
-            `https://api.allorigins.win/raw?url=`
-        ];
-        const targetUrl = `https://store.steampowered.com/api/appdetails?appids=${id}`;
-        
-        let found = false;
-        for(const proxy of proxyList) {
-            try {
-                const res = await fetch(proxy + encodeURIComponent(targetUrl));
-                if(res.ok) {
-                    const data = await res.json();
-                    let finalData = data;
-                    if(data.contents) try { finalData = JSON.parse(data.contents); } catch(e){}
-                    
-                    if(finalData && finalData[id] && finalData[id].success) {
-                        const d = finalData[id].data;
-                        this.state.name = d.name;
-                        this.state.appID = id;
-                        this.state.img = d.header_image;
-                        found = true;
-                        break;
-                    }
-                }
-            } catch(e) {}
-        }
-        
-        if(!found) {
-            this.state.name = "Unknown Game (ID: " + id + ")";
-            this.state.img = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`;
-        }
-        
-        this.saveProgress();
-        this.trans(1);
     }
 
     skip() {
@@ -783,7 +745,9 @@ class ReviewOS {
                         const newID = prompt("Enter Steam App ID (Numbers Only) to fetch image:", "");
                         if(newID && /^\d+$/.test(newID.trim())) {
                             this.state.appID = newID.trim();
-                            this.fetchDetailsFromID(this.state.appID);
+                            this.state.img = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${this.state.appID}/header.jpg`;
+                            this.saveProgress();
+                            this.render();
                             return;
                         }
                     }
@@ -1005,74 +969,58 @@ class ReviewOS {
             this.ctl = new AbortController();
             const signal = this.ctl.signal;
             
-            const storeUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`;
-            const cheapSharkUrl = `https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(q)}&limit=5`;
-            const communityUrl = `https://steamcommunity.com/actions/SearchApps/${encodeURIComponent(q)}`;
-
+            const targetUrl = `https://steamcommunity.com/actions/SearchApps/${encodeURIComponent(q)}`;
+            
             const proxies = [
-                `https://corsproxy.io/?`,
-                `https://api.allorigins.win/raw?url=`,
-                `https://thingproxy.freeboard.io/fetch/`,
-                `https://api.codetabs.com/v1/proxy?quest=`
+                { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}` },
+                { url: `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` },
+                { url: `https://thingproxy.freeboard.io/fetch/${targetUrl}` }
             ];
-            
-            const tryFetch = async (targetUrl, type = 'store') => {
-                const urlsToTry = (type === 'cheapshark') ? [targetUrl, ...proxies.map(p => p + encodeURIComponent(targetUrl))] : proxies.map(p => p + encodeURIComponent(targetUrl));
-                
-                for (const url of urlsToTry) {
-                    if (signal.aborted) break;
-                    try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 2000);
-                        const response = await fetch(url, { signal: (signal.aborted ? signal : controller.signal) });
-                        clearTimeout(timeoutId);
-                        
-                        if(!response.ok) continue;
-                        let data = await response.json();
-                        
-                        if (data.contents) { try { data = JSON.parse(data.contents); } catch(e) {} }
 
-                        if (type === 'cheapshark' && Array.isArray(data)) {
-                             if(data.length === 0) return null;
-                             return { items: data.map(x => ({ id: x.steamAppID, name: x.external, tiny_image: x.thumb })) };
-                        }
+            let success = false;
 
-                        if (type === 'community' && Array.isArray(data)) {
-                             return { items: data.map(x => ({ id: x.appid, name: x.name, tiny_image: x.logo || x.icon })) };
-                        }
+            for (const proxy of proxies) {
+                if (success || signal.aborted) break;
+                try {
+                    const response = await fetch(proxy.url, { signal });
+                    if(!response.ok) continue;
+                    
+                    let data = await response.json();
+                    
+                    if (data.contents) {
+                        try { data = JSON.parse(data.contents); } catch(e) {}
+                    }
+
+                    if (Array.isArray(data)) {
+                        const items = data.map(app => ({
+                            id: app.appid,
+                            name: app.name,
+                            tiny_image: (app.logo || app.icon || '').replace('http://', 'https://')
+                        }));
                         
-                        if (data && (data.items || data.total > 0)) return data;
-                    } catch(e) { continue; }
-                }
-                return null;
-            };
+                        items.sort((a,b) => {
+                            const aEx = a.name.toLowerCase() === q.toLowerCase();
+                            const bEx = b.name.toLowerCase() === q.toLowerCase();
+                            return bEx - aEx;
+                        });
 
-            let result = await tryFetch(storeUrl, 'store');
-            
-            if (!result && !signal.aborted) {
-                result = await tryFetch(cheapSharkUrl, 'cheapshark');
+                        const result = { items: items };
+                        this.searchCache.set(cacheKey, result);
+                        this.renderResults(result, q);
+                        success = true;
+                    }
+                } catch(e) { continue; }
             }
 
-            if (!result && !signal.aborted) {
-                result = await tryFetch(communityUrl, 'community');
-            }
-
-            if (result && !signal.aborted) {
-                this.searchCache.set(cacheKey, result);
-                this.renderResults(result, q);
-            } else if (!signal.aborted) {
+            if (!success && !signal.aborted) {
                 sp.style.display='none';
                 dd.replaceChildren();
                 dd.append(el('div', 'dd-item', [
-                    el('span', 'dd-text', `Connection Failed. `, {style:'color:var(--c-neon-red)'}),
-                    el('a', 'dd-text', `[FIND ID ON STEAMDB]`, {
-                        style:'color:var(--c-neon-blue); text-decoration:underline; margin-left:5px',
-                        href: `https://steamdb.info/search/?a=app&q=${encodeURIComponent(q)}`,
-                        target: '_blank', rel: 'noopener noreferrer',
-                        onclick: (e) => e.stopPropagation() 
-                    })
+                    el('span', 'dd-text', `Connection failed. Press Enter to use manual mode.`, {style:'color:var(--c-neon-red)'})
                 ], {
-                    onclick: () => { /* No-op to allow link click */ }
+                    onclick: () => { 
+                         this.state.name = q; this.nav(1);
+                    }
                 }));
                 dd.classList.add('visible');
             }
