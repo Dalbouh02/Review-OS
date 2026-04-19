@@ -1,7 +1,7 @@
 # 🌌 Review OS - The Ultimate Steam Review Generator
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Version](https://img.shields.io/badge/Version-v3.1.0-neon.svg)
+![Version](https://img.shields.io/badge/Version-v4.0.0-neon.svg)
 ![Status](https://img.shields.io/badge/Status-Online-success.svg)
 
 **Review OS** is a futuristic, holographic web application designed to help gamers create professional, perfectly formatted **Steam Reviews**. It features a 3D tilting interface, automatic rating calculation, and deep customization options.
@@ -29,6 +29,7 @@
 *   **Visual Log:** See a visual summary of your choices before generating.
 *   **BBCode Export:** Generates formatted code ready to paste into Steam.
 *   **Auto-Rating:** Automatically calculates a score (e.g., 8.5/10) based on your positive/negative choices.
+*   **ASCII Art Decorator:** Added a new step in the protocol to select from 30+ custom ASCII arts and more soon.
 
 ### 🛠️ Developer Console
 *   **Direct Support:** Built-in links to GitHub, Steam, and Twitch.
