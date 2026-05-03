@@ -1,4 +1,4 @@
-# 🌌 Review OS - The Ultimate Steam Review Generator
+#  Review OS - The Ultimate Steam Review Generator
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Version](https://img.shields.io/badge/Version-v4.0.0-neon.svg)
@@ -8,35 +8,35 @@
 
 ---
 
-## 🚀 [**Launch Live App**](https://dalbouh02.github.io/Review-OS/)
+##  [**Launch Live App**](https://dalbouh02.github.io/Review-OS/)
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
-### 🖥️ Holographic Interface
+###  Holographic Interface
 *   **3D Tilt FX:** The UI physically tilts in 3D space as you move your mouse.
 *   **Cyberpunk Aesthetics:** Neon glows, scanlines, and a moving mesh background.
 *   **Typewriter Engine:** Text types out dynamically like a terminal.
 
-### 🔍 Smart Game Search
+###  Smart Game Search
 *   **Steam Database Integration:** Instantly search for any game on Steam.
 *   **Auto-Fetch:** Grabs the official game cover art and AppID.
 *   **No API Key Needed:** Uses a secure proxy to fetch data directly.
 
-### 📝 Review Generation
+###  Review Generation
 *   **20+ Categories:** Rate everything from Graphics and Audio to Monetization and Community.
 *   **Visual Log:** See a visual summary of your choices before generating.
 *   **BBCode Export:** Generates formatted code ready to paste into Steam.
 *   **Auto-Rating:** Automatically calculates a score (e.g., 8.5/10) based on your positive/negative choices.
 *   **ASCII Art Decorator:** Added a new step in the protocol to select from 30+ custom ASCII arts and more soon.
 
-### 🛠️ Developer Console
+###  Developer Console
 *   **Direct Support:** Built-in links to GitHub, Steam, and Twitch.
 
 ---
 
-## 📸 Screenshots
+##  Screenshots
 
 | Start Screen | Selection Menu |
 | :---: | :---: |
@@ -48,7 +48,7 @@
 
 ---
 
-## 🛠️ How to Use
+##  How to Use
 
 1.  **Launch the App:** Open the [Live Link](https://dalbouh02.github.io/Review-OS/).
 2.  **Search Game:** Type the name of the game you are reviewing.
@@ -59,7 +59,7 @@
 
 ---
 
-## 📦 Installation (Local)
+##  Installation (Local)
 
 If you want to run this locally or modify it:
 
@@ -75,7 +75,7 @@ If you want to run this locally or modify it:
 
 ---
 
-## 👨‍💻 Credits
+##  Credits
 
 **Made By:** Anonymous (Dalbouh02)
 
@@ -85,12 +85,8 @@ If you want to run this locally or modify it:
 
 ---
 
-## 🎁 Support
+##  Support
 
 If you like this tool, consider sending a trade offer or a gift on Steam!
 
 [**>> Send gifts <<**](https://steamcommunity.com/tradeoffer/new/?partner=346289076&token=AtneZynY)
-
----
-
-*Made with ❤️ for the Steam Community.*
